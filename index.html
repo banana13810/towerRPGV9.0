@@ -21,6 +21,13 @@ margin:auto;
 padding:10px;
 }
 
+.panel{
+background:#1b1b1b;
+padding:10px;
+margin:8px 0;
+border-radius:10px;
+}
+
 .bar{
 width:100%;
 height:20px;
@@ -33,9 +40,11 @@ margin:5px 0;
 .enemybar{height:15px;background:lime;border-radius:10px;}
 
 button{
+background:#333;
+color:white;
+border:none;
 margin:3px;
-padding:8px;
-font-size:14px;
+padding:8px 12px;
 border-radius:6px;
 }
 
@@ -51,6 +60,7 @@ border-radius:8px;
 .epic{color:#cc66ff}
 .legend{color:gold}
 .mythic{color:red}
+.boss{color:#ff4444;font-weight:bold}
 </style>
 
 </head>
@@ -61,6 +71,8 @@ border-radius:8px;
 
 <h2>🏯塔RPG</h2>
 
+<div class="panel">
+
 <h3 id="enemy"></h3>
 
 <div class="bar">
@@ -69,7 +81,9 @@ border-radius:8px;
 
 <div id="enemyHP"></div>
 
-<hr>
+</div>
+
+<div class="panel">
 
 <div>階層 <span id="floor"></span></div>
 
@@ -87,6 +101,10 @@ border-radius:8px;
 
 <div>状態異常: <span id="status"></span></div>
 
+</div>
+
+<div class="panel">
+
 <button onclick="playerAttack()">⚔攻撃</button> <button onclick="toggleAuto()">🤖オート</button>
 
 <br>
@@ -103,7 +121,9 @@ border-radius:8px;
 
 <div id="skills"></div>
 
-<hr>
+</div>
+
+<div class="panel">
 
 <h3>🎒装備</h3>
 
@@ -111,13 +131,15 @@ border-radius:8px;
 
 <div id="inventory"></div>
 
-<hr>
+</div>
+
+<div class="panel">
 
 <h3>🏪ショップ</h3>
 
 <button onclick="buyPotion()">HPポーション 20G</button> <button onclick="gacha()">装備ガチャ 100G</button>
 
-<hr>
+</div>
 
 <button onclick="save()">💾セーブ</button>
 
@@ -155,7 +177,9 @@ let inventory=[]
 let playerStatus=[]
 let enemyStatus=[]
 
-let rarity=["common","rare","epic","legend","mythic"]
+let uraTower=false
+
+let rarity=["common","rare","epic","legend","mythic","boss"]
 
 let logHistory=[]
 
@@ -172,15 +196,26 @@ let list=["スライム","ゴブリン","オオカミ","骸骨"]
 enemy=list[Math.floor(Math.random()*list.length)]
 
 enemyMax=20+floor*5
+
+if(uraTower)enemyMax*=5
+
 enemyHP=enemyMax
 
 if(floor%10==0){
 enemy="🐉ボス"
 enemyMax=200+floor*10
+if(uraTower)enemyMax*=5
+enemyHP=enemyMax
+}
+
+if(floor==200 && !uraTower){
+enemy="👑塔の支配者"
+enemyMax=5000
 enemyHP=enemyMax
 }
 
 document.getElementById("enemy").innerText=enemy
+
 }
 
 function playerAttack(){
@@ -189,21 +224,26 @@ let dmg=attack
 
 enemyHP-=dmg
 
-log("⚔ "+dmg)
-
 playerMP+=5
 if(playerMP>playerMaxMP)playerMP=playerMaxMP
 
 if(enemyHP<=0){
+
+if(enemy=="👑塔の支配者"){
+alert("🏆塔クリア！裏の塔解放！")
+uraTower=true
+floor=201
+spawnEnemy()
+update()
+return
+}
 
 gold+=10+floor
 exp+=5
 
 dropItem()
 
-log("敵撃破")
-
-setTimeout(()=>{ next() },200)
+setTimeout(()=>{next()},200)
 
 }
 
@@ -218,6 +258,9 @@ function enemyAttack(){
 if(enemyHP<=0)return
 
 let dmg=5+floor-defense
+
+if(uraTower)dmg*=2
+
 if(dmg<1)dmg=1
 
 playerHP-=dmg
@@ -246,8 +289,6 @@ defense+=1
 playerHP=playerMax
 playerMP=playerMaxMP
 
-log("✨Lv"+level)
-
 }
 
 }
@@ -258,7 +299,6 @@ let skills=[
 if(playerMP<20)return
 playerMP-=20
 enemyHP-=attack*3
-log("🔥ファイア")
 }},
 
 {name:"❄アイス",cost:15,action(){
@@ -267,7 +307,6 @@ playerMP-=15
 enemyHP-=attack*2
 if(Math.random()<0.5){
 enemyStatus.push({icon:"❄",turns:1})
-log("❄凍結")
 }
 }},
 
@@ -277,7 +316,6 @@ playerMP-=25
 enemyHP-=attack*2.5
 if(Math.random()<0.5){
 enemyStatus.push({icon:"⚡",turns:2})
-log("⚡麻痺")
 }
 }},
 
@@ -286,7 +324,6 @@ if(playerMP<15)return
 playerMP-=15
 playerHP+=30
 if(playerHP>playerMax)playerHP=playerMax
-log("💖回復")
 }},
 
 {name:"🛡バリア",cost:20,action(){
@@ -294,7 +331,6 @@ if(playerMP<20)return
 playerMP-=20
 defense+=5
 setTimeout(()=>defense-=5,5000)
-log("🛡防御UP")
 }}
 
 ]
@@ -315,7 +351,20 @@ function useSkill(i){
 
 skills[i].action()
 
+if(enemyHP<=0){
+
+gold+=10+floor
+exp+=5
+
+dropItem()
+
+setTimeout(()=>{next()},200)
+
+}else{
+
 enemyAttack()
+
+}
 
 update()
 
@@ -323,33 +372,30 @@ update()
 
 function dropItem(){
 
+let isBoss=enemy.includes("ボス")||enemy=="👑塔の支配者"
+
+if(isBoss && Math.random()<0.1){
+
+let atk=30+floor
+let def=20
+let mp=30
+
+inventory.push({atk,def,mp,rarity:"boss",level:1})
+
+log("💎ボス装備ドロップ")
+
+drawInventory()
+
+return
+}
+
 if(Math.random()>0.3)return
 
-let r=rarity[Math.floor(Math.random()*rarity.length)]
+let r=rarity[Math.floor(Math.random()*5)]
 
 let atk=Math.floor(Math.random()*10)+floor
 let def=Math.floor(Math.random()*5)
 let mp=Math.floor(Math.random()*10)
-
-inventory.push({atk,def,mp,rarity:r,level:1})
-
-log("🎁装備ドロップ")
-
-drawInventory()
-
-}
-
-function gacha(){
-
-if(gold<100)return
-
-gold-=100
-
-let r=rarity[Math.floor(Math.random()*rarity.length)]
-
-let atk=Math.floor(Math.random()*15)
-let def=Math.floor(Math.random()*8)
-let mp=Math.floor(Math.random()*15)
 
 inventory.push({atk,def,mp,rarity:r,level:1})
 
@@ -386,8 +432,6 @@ attack+=item.atk
 defense+=item.def
 playerMaxMP+=item.mp
 
-log("🧥装備")
-
 update()
 
 }
@@ -398,10 +442,7 @@ let item=inventory[i]
 
 let cost=item.level*50
 
-if(gold<cost){
-log("💰不足")
-return
-}
+if(gold<cost)return
 
 gold-=cost
 
@@ -410,8 +451,6 @@ item.level++
 item.atk+=2
 item.def+=1
 item.mp+=2
-
-log("⬆強化")
 
 drawInventory()
 update()
@@ -446,8 +485,6 @@ rarity:rarity[next],
 level:1
 })
 
-log("🔨合成成功")
-
 break
 
 }
@@ -469,12 +506,28 @@ if(playerHP>playerMax)playerHP=playerMax
 
 }
 
+function gacha(){
+
+if(gold<100)return
+
+gold-=100
+
+let r=rarity[Math.floor(Math.random()*5)]
+
+let atk=Math.floor(Math.random()*15)
+let def=Math.floor(Math.random()*8)
+let mp=Math.floor(Math.random()*15)
+
+inventory.push({atk,def,mp,rarity:r,level:1})
+
+drawInventory()
+
+}
+
 function next(){
 
 floor++
-
 spawnEnemy()
-
 update()
 
 }
@@ -492,7 +545,6 @@ let skill=skills[prioritySkill]
 if(playerMP>=skill.cost){
 
 skill.action()
-enemyAttack()
 
 }else{
 
@@ -509,12 +561,10 @@ setInterval(autoBattle,1000)
 function save(){
 
 let data={
-floor,level,exp,gold,inventory
+floor,level,exp,gold,inventory,uraTower
 }
 
 localStorage.setItem("towerRPG",JSON.stringify(data))
-
-log("💾セーブ")
 
 }
 
@@ -525,9 +575,6 @@ prioritySkill=parseInt(this.value)
 function update(){
 
 levelUp()
-
-playerStatus.forEach(s=>s.turns--)
-playerStatus=playerStatus.filter(s=>s.turns>0)
 
 document.getElementById("status").innerText=
 playerStatus.map(s=>s.icon).join(" ")
